@@ -6,6 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     curl \
     git \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first (for better caching)
@@ -20,6 +21,9 @@ RUN git clone https://github.com/NousResearch/hermes-agent.git /hermes-agent
 
 # Install hermes-agent in editable mode
 RUN cd /hermes-agent && pip install -e .
+
+# Initialize the agent (this creates the state.db with proper schema)
+RUN cd /hermes-agent && python3 -c "from hermes import cli; cli.init()" || true
 
 # Copy the rest of the application
 COPY . .
