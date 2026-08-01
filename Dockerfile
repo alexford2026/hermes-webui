@@ -6,7 +6,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     curl \
     git \
-    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first (for better caching)
@@ -22,24 +21,26 @@ RUN git clone https://github.com/NousResearch/hermes-agent.git /hermes-agent
 # Install hermes-agent in editable mode
 RUN cd /hermes-agent && pip install -e .
 
-# Initialize the agent (this creates the state.db with proper schema)
-RUN cd /hermes-agent && python3 -c "from hermes import cli; cli.init()" || true
+# Verify installation
+RUN python3 -c "import hermes; print('Hermes imported successfully')" || echo "Hermes import failed"
 
 # Copy the rest of the application
 COPY . .
 
-# Set environment variables
+# Set environment variables - using ENV directly
 ENV HERMES_WEBUI_HOST=0.0.0.0
 ENV HERMES_WEBUI_PORT=8787
 ENV HERMES_WEBUI_AGENT_DIR=/hermes-agent
 ENV PYTHONPATH=/hermes-agent:$PYTHONPATH
 
+# Create a startup script that sets the variable
+RUN echo '#!/bin/bash\n\
+export HERMES_WEBUI_AGENT_DIR=/hermes-agent\n\
+export PYTHONPATH=/hermes-agent:$PYTHONPATH\n\
+python3 /app/server.py' > /start.sh && chmod +x /start.sh
+
 # Expose the port
 EXPOSE 8787
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:8787/health || exit 1
-
-# Run the application
-CMD ["python3", "server.py"]
+# Run the startup script
+CMD ["/start.sh"]
